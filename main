@@ -1,0 +1,144 @@
+import pygame
+import random
+import math
+
+# 初始化 Pygame
+pygame.init()
+
+# 屏幕尺寸
+xScreen, yScreen = 1200, 800
+# 常量定义
+PI = math.pi
+e = math.e
+averag_distance = 0.162    # 平均距离阈值
+quantity = 506             # 一个完整爱心点数
+frames = 20                # 扩张帧数
+# 颜色列表，使用 RGB 元组
+colors = [
+    (255, 32, 83), (252, 222, 250),
+    (255, 0, 0),   (255, 0, 0),
+    (255, 2, 2),   (255, 0, 8),
+    (255, 5, 5)
+]
+
+# 点的结构体
+class Point:
+    def __init__(self, x, y, color=None):
+        self.x = x
+        self.y = y
+        self.color = color
+
+# 坐标转换：数学坐标 → 屏幕坐标
+def screen_x(x):
+    return int(x + xScreen / 2)
+
+def screen_y(y):
+    return int(-y + yScreen / 2)
+
+# 生成 [x1, x2] 间随机整数
+def creat_random(x1, x2):
+    return random.randint(x1, x2)
+
+# 生成原始爱心点和放大后带随机偏移的点
+def create_data():
+    origin_points = []
+    # 1. 用参数方程生成原始心形轮廓坐标
+    x1, y1 = 0, 0
+    for i in range(int(2 * PI / 0.005)):
+        radian = 0.1 + i * 0.005
+        x2 = 16 * math.sin(radian) ** 3
+        y2 = (13 * math.cos(radian)
+              - 5 * math.cos(2 * radian)
+              - 2 * math.cos(3 * radian)
+              - math.cos(4 * radian))
+        dist = math.hypot(x2 - x1, y2 - y1)
+        if dist > averag_distance:
+            origin_points.append(Point(x2, y2))
+            x1, y1 = x2, y2
+
+    points = []
+    # 2. 对原始点按不同系数放大并随机保留
+    for size in [i * 0.1 for i in range(1, 201)]:
+        # Sigmoid 筛选概率
+        success_p = 1 / (1 + math.exp(8 - size / 2))
+        for pt in origin_points:
+            if success_p > creat_random(0, 100) / 100.0:
+                color = random.choice(colors)
+                x = size * pt.x + creat_random(-4, 4)
+                y = size * pt.y + creat_random(-4, 4)
+                points.append(Point(x, y, color))
+    return points
+
+# 根据 points 生成每一帧的 Surface
+def create_frames(points):
+    images = []
+    for frame in range(frames):
+        surface = pygame.Surface((xScreen, yScreen))
+        surface.fill((0, 0, 0))  # 黑底
+        # 对所有点做一次“跳动”更新并绘制
+        for pt in points:
+            # 计算当前点距离原点
+            dist = math.hypot(pt.x, pt.y)
+            # 二次函数控制的增长距离
+            delta = (-0.0009 * dist * dist + 0.35714 * dist + 5) / frames
+            # 分解到 x、y
+            pt.x += delta * pt.x / dist
+            pt.y += delta * pt.y / dist
+            # 绘制圆点
+            pygame.draw.circle(
+                surface,
+                pt.color,
+                (screen_x(pt.x), screen_y(pt.y)),
+                1
+            )
+        images.append(surface)
+    return images
+
+def main():
+    # 创建窗口
+    screen = pygame.display.set_mode((xScreen, yScreen))
+    pygame.display.set_caption("跳动爱心动画")
+
+    # 随机种子
+    random.seed()
+
+    # 生成数据与帧
+    points = create_data()
+    images = create_frames(points)
+
+    frame_idx = 0
+    extend = True  # 正向播放
+    shrink = False # 反向播放
+
+    clock = pygame.time.Clock()
+
+    running = True
+    while running:
+        # 事件处理
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # 显示当前帧
+        screen.blit(images[frame_idx], (0, 0))
+        pygame.display.flip()
+
+        # 控制帧率
+        clock.tick(50)  # 大约 50 FPS
+
+        # 播放逻辑：正向到最后再反向
+        if extend:
+            if frame_idx < frames - 1:
+                frame_idx += 1
+            else:
+                extend, shrink = False, True
+        else:
+            if frame_idx > 0:
+                frame_idx -= 1
+            else:
+                extend, shrink = True, False
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
